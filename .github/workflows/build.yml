@@ -100,13 +100,29 @@ jobs:
 
       - name: Build kernel
         run: |
+          set -o pipefail          # 关键：让 make 的退出码穿透管道，失败即失败
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          # config 里 CONFIG_CROSS_COMPILE 为空，必须显式传参，否则会用宿主 gcc 编译失败
-          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image.gz-dtb 2>&1 | tail -60
+          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image.gz-dtb 2>&1 | tee build_full.log
           echo "=== 产物 ==="
-          ls -la arch/arm64/boot/ | grep -iE 'image|dtb' || true
+          ls -la arch/arm64/boot/ | grep -iE 'image|dtb' || echo "无产物"
+
+      # 无论成败都上传完整日志，便于定位错误
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build_full.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Show errors on failure
+        if: failure()
+        run: |
+          echo "===== 编译错误摘要 ====="
+          grep -nE 'error:|Error [0-9]|undefined reference|No such file' build_full.log 2>/dev/null | head -60 || echo "未匹配到错误行"
 
       - name: Upload kernel artifact
         uses: actions/upload-artifact@v4
