@@ -104,7 +104,11 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- Image.gz-dtb 2>&1 | tee build_full.log
+          # 4.14 老内核用 GCC 11 编译会遇到新版 -Werror 检查（如 designated-init），
+          # 设备出厂用 clang 12 无此问题。这里放宽为警告，避免编译中断。
+          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+               KCFLAGS="-Wno-error -Wno-designated-init" \
+               Image.gz-dtb 2>&1 | tee build_full.log
           echo "=== 产物 ==="
           ls -la arch/arm64/boot/ | grep -iE 'image|dtb' || echo "无产物"
 
